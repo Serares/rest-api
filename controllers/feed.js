@@ -1,4 +1,4 @@
-
+const { validationResult } = require('express-validator/check');
 
 
 exports.getPosts = (req, res, next) => {
@@ -21,6 +21,11 @@ exports.getPosts = (req, res, next) => {
 }
 
 exports.createPost = (req, res, next) => {
+    const errors = validationResult(req);
+    //isEmpty  is a validationResult function
+    if (!errors.isEmpty()) {
+        return res.status(422).json({ message: 'Not valid', errors: errors.array() })
+    }
     console.log("Changed 1", req.body);
     //added by bodyParser
     const title = req.body.title;
