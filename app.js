@@ -4,6 +4,7 @@ const dbPass = require('./config/db_pass');
 const mongoose = require('mongoose');
 const path = require('path');
 const multer = require('multer');
+const uuid = require('uuid/v4');
 
 //body-parser is used to parse incoming req bodys
 const feedRoutes = require('./routes/feed');
@@ -15,7 +16,7 @@ const fileStorage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         console.log(file);
-        cb(null, new Date().getTime() + '+' + file.originalname)
+        cb(null, uuid() +''+ file.originalname);
     }
 });
 

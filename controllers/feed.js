@@ -1,5 +1,8 @@
 const { validationResult } = require('express-validator/check');
 const Post = require('../models/post');
+//florinSalam
+const fs = require('fs');
+const path = require('path');
 
 exports.getPosts = (req, res, next) => {
     //important to send status codes
@@ -102,4 +105,83 @@ exports.getPost = (req, res, next) => {
             next(err);
         })
 
+}
+
+exports.changePost = (req, res, next) => {
+    const errors = validationResult(req);
+    const postId = req.params.postId;
+    //isEmpty  is a validationResult function
+    if (!errors.isEmpty()) {
+        const error = new Error('Not valid');
+        error.statusCode = 422;
+        error.errors = errors.array();
+        //this will exit the function and go the the error handling function from express
+        // will work here because it's synchronous
+        throw error;
+        // return res.status(422).json({ message: 'Not valid', errors: errors.array() })
+    }
+    
+    //TODO fix the bug when changing the image
+    const title = req.body.title;
+    const content = req.body.content;
+    let imageUrl = req.body.image;
+
+    console.log("req body", req.body);
+    if (req.file) {
+        console.log(req.file);
+        imageUrl = req.file.path.replace('\\', '/');
+    }
+
+    if (!imageUrl) {
+        const error = new Error("No image picked");
+        error.statusCode = 422;
+        throw error;
+    }
+
+    Post.findById(postId)
+        .then(post => {
+            if (!post) {
+                const error = new Error("Cant find post");
+                error.statusCode = 404;
+                // if you throw err in .then
+                // it will get to the catch();
+                throw error;
+            }
+            // meaning that the image was changed
+            // and the last image needs to be deleted
+            if (imageUrl !== post.imageUrl) {
+                clearImage(post.ImageUrl);
+            }
+
+            post.title = title;
+            post.imageUrl = imageUrl;
+            post.content = content;
+            return post.save();
+        })
+        .then(result => {
+            //we get the result of the .save();
+            res.status(200).json({ message: "Post updated", post: result });
+        })
+        .catch(err => {
+            if (!err.statusCode) {
+                err.statusCode = 500;
+            }
+            // throw will not work in a promise here
+            // because it's async
+            //throw err
+            next(err);
+        })
+
+}
+
+// deleting the image helper function
+const clearImage = filePath => {
+    //__dirname is the current folder
+    // .. going up to the root folder
+    // and looking for filePath
+    filePath = path.join(__dirname, '..', filePath);
+    //deleting the image
+    fs.unlink(filePath, error => {
+        console.log(error);
+    })
 }
