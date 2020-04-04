@@ -120,7 +120,7 @@ exports.changePost = (req, res, next) => {
         throw error;
         // return res.status(422).json({ message: 'Not valid', errors: errors.array() })
     }
-    
+
     //TODO fix the bug when changing the image
     const title = req.body.title;
     const content = req.body.content;
@@ -172,6 +172,36 @@ exports.changePost = (req, res, next) => {
             next(err);
         })
 
+}
+
+exports.deletePost = (req, res, next) => {
+    const postId = req.params.postId;
+    Post.findById(postId)
+        .then(post => {
+            //logged user?
+            if (!post) {
+                const error = new Error("Cant find post");
+                error.statusCode = 404;
+                // if you throw err in .then
+                // it will get to the catch();
+                throw error;
+            }
+            clearImage(post.imageUrl);
+            return Post.findByIdAndRemove(postId);
+        })
+        .then(result => {
+            console.log("Deleted", result);
+            res.status(200).json({ message: "Deleted Post" });
+        })
+        .catch(err => {
+            if (!err.statusCode) {
+                err.statusCode = 500;
+            }
+            // throw will not work in a promise here
+            // because it's async
+            //throw err
+            next(err);
+        })
 }
 
 // deleting the image helper function
