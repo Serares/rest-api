@@ -248,6 +248,54 @@ exports.deletePost = (req, res, next) => {
         })
 }
 
+exports.getUserStatus = (req, res, next) => {
+    const userId = req.userId;
+
+    User.findById(userId)
+        .then(user => {
+            console.log(user);
+            if (!user) {
+                throw new Error("Can't find user with this userId")
+            }
+
+            res.status(200).json({ message: "Found user status", status: user.status })
+        })
+        .catch(error => {
+            const err = new Error('Network error');
+            err.statusCode = 500;
+            err.error = error;
+            next(err);
+        })
+}
+
+exports.updateUserStatus = (req, res, next) => {
+
+    const userId = req.userId;
+    const newStatus = req.body.status;
+    User.findById(userId)
+        .then(user => {
+            if (!user) {
+                throw new Error("Can't find user change status")
+            }
+
+            if (!newStatus) {
+                throw new Error("New status is empty");
+            }
+            user.status = newStatus;
+            return user.save()
+        })
+        .then(result => {
+            console.log("Status updated success");
+            res.status(201).json({ message: "User status changed success", result: result });
+        })
+        .catch(error => {
+            const err = new Error('Network error');
+            err.statusCode = 500;
+            err.error = error;
+            next(err);
+        })
+}
+
 // deleting the image helper function
 const clearImage = filePath => {
     //__dirname is the current folder
