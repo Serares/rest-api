@@ -16,8 +16,8 @@ const postSchema = new Schema({
         required: true
     },
     creator:{
-        type: Object,
-        required: true
+        type: Schema.Types.ObjectId,
+        ref: 'User'
     }
     //passing an object here as a second parameter 
     // it will create a timestamp when the object is creted

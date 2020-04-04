@@ -3,6 +3,7 @@ const Post = require('../models/post');
 //florinSalam
 const fs = require('fs');
 const path = require('path');
+const User = require('../models/user');
 
 exports.getPosts = (req, res, next) => {
     //important to send status codes
@@ -16,8 +17,8 @@ exports.getPosts = (req, res, next) => {
         .then(count => {
             totalItems = count;
             return Post.find()
-            .skip((currentPage-1) * perPage)
-            .limit(perPage);
+                .skip((currentPage - 1) * perPage)
+                .limit(perPage);
         })
         .then(posts => {
             res.status(200).json({
@@ -60,22 +61,33 @@ exports.createPost = (req, res, next) => {
     //added by bodyParser
     const title = req.body.title;
     const content = req.body.content;
+    let creator;
     // no need for createdAt
     // no need for _id ; mongoose will create thoes
     const post = new Post({
         title: title,
         content: content,
         imageUrl: imageUrl,
-        creator: { name: "RJ" }
+        creator: req.userId
     })
 
     post.save()
+        .then(response => {
+            return User.findById(req.userId);
+        })
+        .then(user => {
+            user.posts.push(post);
+            creator = user;
+            // saveing the use again with the new data
+            return user.save()
+        })
         .then(response => {
             //here we'll get to the db
             //201 success created resource
             res.status(201).json({
                 message: "Post created success",
-                post: post
+                post: post,
+                creator: { _id: creator._id, name: creator.name }
             });
         })
         .catch(err => {
@@ -158,6 +170,10 @@ exports.changePost = (req, res, next) => {
                 // it will get to the catch();
                 throw error;
             }
+            if (post.creator.toString() !== req.userId) {
+                const error = new Error('Authorization error');
+                throw error;
+            }
             // meaning that the image was changed
             // and the last image needs to be deleted
             if (imageUrl !== post.imageUrl) {
@@ -195,6 +211,11 @@ exports.deletePost = (req, res, next) => {
                 error.statusCode = 404;
                 // if you throw err in .then
                 // it will get to the catch();
+                throw error;
+            }
+            if (post.creator.toString() !== req.userId) {
+                const error = new Error('Authorization error');
+                error.statusCode = 403;
                 throw error;
             }
             clearImage(post.imageUrl);

@@ -48,7 +48,7 @@ app.use('/feed', feedRoutes);
 app.use(authRoutes);
 
 app.get('/', (req, res, next) => {
-    res.status(200).json({ "message": "Salutare1" })
+    res.status(200).json({ "message": "Salutare2" })
 })
 
 app.use((err, req, res, next) => {
