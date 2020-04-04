@@ -1,4 +1,4 @@
-const { validationResult } = require('express-validator/check');
+const { validationResult } = require('express-validator');
 const Post = require('../models/post');
 //florinSalam
 const fs = require('fs');
@@ -7,12 +7,23 @@ const path = require('path');
 exports.getPosts = (req, res, next) => {
     //important to send status codes
     //for client to know what to render
+    const currentPage = req.query.pageNumber || 1;
+    const perPage = 2;
+    let totalItems;
 
     Post.find()
+        .countDocuments()
+        .then(count => {
+            totalItems = count;
+            return Post.find()
+            .skip((currentPage-1) * perPage)
+            .limit(perPage);
+        })
         .then(posts => {
             res.status(200).json({
                 message: "Posts found successfully",
-                posts: posts
+                posts: posts,
+                totalItems: totalItems
             });
         })
         .catch(err => {

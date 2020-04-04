@@ -8,7 +8,7 @@ const uuid = require('uuid/v4');
 
 //body-parser is used to parse incoming req bodys
 const feedRoutes = require('./routes/feed');
-
+const authRoutes = require('./routes/auth');
 
 const fileStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -45,6 +45,8 @@ app.use((req, res, next) => {
 })
 
 app.use('/feed', feedRoutes);
+app.use(authRoutes);
+
 app.get('/', (req, res, next) => {
     res.status(200).json({ "message": "Salutare1" })
 })
@@ -57,7 +59,7 @@ app.use((err, req, res, next) => {
     res.status(status).json({ message: message });
 })
 
-mongoose.connect(dbPass.mongoPass())
+mongoose.connect(dbPass.mongoPass(), {useNewUrlParser: true, useUnifiedTopology: true})
     .then(result => {
         app.listen(8080);
     })
