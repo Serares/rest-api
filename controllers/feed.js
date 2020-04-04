@@ -76,9 +76,10 @@ exports.createPost = (req, res, next) => {
             return User.findById(req.userId);
         })
         .then(user => {
+            //adding the post to the user obj in db
             user.posts.push(post);
             creator = user;
-            // saveing the use again with the new data
+            // saving the use again with the new data
             return user.save()
         })
         .then(response => {
@@ -220,6 +221,17 @@ exports.deletePost = (req, res, next) => {
             }
             clearImage(post.imageUrl);
             return Post.findByIdAndRemove(postId);
+        })
+        .then(result => {
+            console.log("Post deleted", result);
+            //clearing posts from user object in the DB
+            return User.findById(req.userId);
+        })
+        .then(user => {
+            // pull is a mongoose method in this case
+            // deleting the post from the user object
+            user.posts.pull(postId);
+            return user.save();
         })
         .then(result => {
             console.log("Deleted", result);
