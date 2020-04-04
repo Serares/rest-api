@@ -5,41 +5,44 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../models/user');
 
-exports.getPosts = (req, res, next) => {
+exports.getPosts = async (req, res, next) => {
     //important to send status codes
     //for client to know what to render
     const currentPage = req.query.pageNumber || 1;
     const perPage = 2;
     let totalItems;
+    try {
 
-    Post.find()
-        .countDocuments()
-        .then(count => {
-            totalItems = count;
-            return Post.find()
-                .skip((currentPage - 1) * perPage)
-                .limit(perPage);
-        })
-        .then(posts => {
-            res.status(200).json({
-                message: "Posts found successfully",
-                posts: posts,
-                totalItems: totalItems
-            });
-        })
-        .catch(err => {
-            if (!err.statusCode) {
-                err.statusCode = 500;
-            }
-            // throw will not work in a promise here
-            // because it's async
-            //throw err
-            next(err);
-        })
+        // async
+        totalItems = await Post.find().countDocuments();
+        let posts = await Post.find().skip((currentPage - 1) * perPage).limit(perPage);
 
+        res.status(200).json({
+            message: "Posts found successfully",
+            posts: posts,
+            totalItems: totalItems
+        });
+    } catch (error) {
+        if (!error.statusCode) {
+            error.statusCode = 500;
+        }
+        // and we use next here because it's an async code
+        next(error);
+    }
+
+    // no need for catch if we use async await
+    //     .catch (err => {
+    //     if (!err.statusCode) {
+    //         err.statusCode = 500;
+    //     }
+    //     // throw will not work in a promise here
+    //     // because it's async
+    //     //throw err
+    //     next(err);
+    // })
 }
 
-exports.createPost = (req, res, next) => {
+exports.createPost = async (req, res, next) => {
     const errors = validationResult(req);
     //isEmpty  is a validationResult function
     if (!errors.isEmpty()) {
@@ -71,229 +74,350 @@ exports.createPost = (req, res, next) => {
         creator: req.userId
     })
 
-    post.save()
-        .then(response => {
-            return User.findById(req.userId);
-        })
-        .then(user => {
-            //adding the post to the user obj in db
-            user.posts.push(post);
-            creator = user;
-            // saving the use again with the new data
-            return user.save()
-        })
-        .then(response => {
-            //here we'll get to the db
-            //201 success created resource
-            res.status(201).json({
-                message: "Post created success",
-                post: post,
-                creator: { _id: creator._id, name: creator.name }
-            });
-        })
-        .catch(err => {
-            if (!err.statusCode) {
-                err.statusCode = 500;
-            }
-            // throw will not work in a promise here
-            // because it's async
-            //throw err
-            next(err);
-        })
-
+    try {
+        let responseFromPost = await post.save();
+        responseFromPost ? console.log("Post saved success", responseFromPost) : null;
+        let foundUser = await User.findById(req.userId);
+        if (!foundUser) throw new Error("Can't find user to add post");
+        foundUser.posts.push(post);
+        creator = foundUser;
+        let resposeUserSaved = await foundUser.save();
+        res.status(201).json({
+            message: "Post created success",
+            post: post,
+            creator: { _id: creator._id, name: creator.name },
+            response: resposeUserSaved
+        });
+    } catch (err) {
+        if (!err.statusCode) {
+            err.statusCode = 500;
+        }
+        // throw will not work in a promise here
+        // because it's async
+        //throw err
+        next(err);
+    }
 }
 
 
-exports.getPost = (req, res, next) => {
+exports.getPost = async (req, res, next) => {
     const postId = req.params.postId;
     //if you return from a then
     // the next then will be called with the returned value
-    Post.findById(postId)
-        .then(post => {
-            if (!post) {
-                const error = new Error("Cant find post");
-                error.statusCode = 404;
-                // if you throw err in .then
-                // it will get to the catch();
-                throw error;
-            }
-            res.status(200).json({ message: "Post found", post: post });
-        })
-        .catch(err => {
-            if (!err.statusCode) {
-                err.statusCode = 500;
-            }
-            // throw will not work in a promise here
-            // because it's async
-            //throw err
-            next(err);
-        })
+    try {
+
+        let foundPost = await Post.findById(postId);
+        if (!foundPost) {
+            const error = new Error("Cant find post");
+            error.statusCode = 404;
+            // if you throw err in .then
+            // it will get to the catch();
+            throw error;
+        }
+        res.status(200).json({ message: "Post found", post: foundPost });
+    } catch (err) {
+        if (!err.statusCode) {
+            err.statusCode = 500;
+        }
+        // throw will not work in a promise here
+        // because it's async
+        //throw err
+        next(err);
+    }
+
+    // Post.findById(postId)
+    //     .then(post => {
+    //         if (!post) {
+    //             const error = new Error("Cant find post");
+    //             error.statusCode = 404;
+    //             // if you throw err in .then
+    //             // it will get to the catch();
+    //             throw error;
+    //         }
+    //         res.status(200).json({ message: "Post found", post: post });
+    //     })
+    //     .catch(err => {
+    //         if (!err.statusCode) {
+    //             err.statusCode = 500;
+    //         }
+    //         // throw will not work in a promise here
+    //         // because it's async
+    //         //throw err
+    //         next(err);
+    //     })
 
 }
 
-exports.changePost = (req, res, next) => {
+exports.changePost = async (req, res, next) => {
     const errors = validationResult(req);
     const postId = req.params.postId;
-    //isEmpty  is a validationResult function
-    if (!errors.isEmpty()) {
-        const error = new Error('Not valid');
-        error.statusCode = 422;
-        error.errors = errors.array();
-        //this will exit the function and go the the error handling function from express
-        // will work here because it's synchronous
-        throw error;
-        // return res.status(422).json({ message: 'Not valid', errors: errors.array() })
-    }
+    try {
+        //isEmpty  is a validationResult function
+        if (!errors.isEmpty()) {
+            const error = new Error('Not valid');
+            error.statusCode = 422;
+            error.errors = errors.array();
+            //this will exit the function and go the the error handling function from express
+            // will work here because it's synchronous
+            throw error;
+            // return res.status(422).json({ message: 'Not valid', errors: errors.array() })
+        }
 
-    //TODO fix the bug when changing the image
-    const title = req.body.title;
-    const content = req.body.content;
-    let imageUrl = req.body.image;
+        //TODO fix the bug when changing the image
+        const title = req.body.title;
+        const content = req.body.content;
+        let imageUrl = req.body.image;
 
-    console.log("req body", req.body);
-    if (req.file) {
-        console.log(req.file);
-        imageUrl = req.file.path.replace('\\', '/');
-    }
+        console.log("req body", req.body);
+        if (req.file) {
+            console.log(req.file);
+            imageUrl = req.file.path;
+        }
 
-    if (!imageUrl) {
-        const error = new Error("No image picked");
-        error.statusCode = 422;
-        throw error;
-    }
+        if (!imageUrl) {
+            const error = new Error("No image picked");
+            error.statusCode = 422;
+            throw error;
+        }
 
-    Post.findById(postId)
-        .then(post => {
-            if (!post) {
-                const error = new Error("Cant find post");
-                error.statusCode = 404;
-                // if you throw err in .then
-                // it will get to the catch();
-                throw error;
-            }
-            if (post.creator.toString() !== req.userId) {
-                const error = new Error('Authorization error');
-                throw error;
-            }
-            // meaning that the image was changed
-            // and the last image needs to be deleted
-            if (imageUrl !== post.imageUrl) {
-                clearImage(post.ImageUrl);
-            }
-
-            post.title = title;
-            post.imageUrl = imageUrl;
-            post.content = content;
-            return post.save();
-        })
-        .then(result => {
-            //we get the result of the .save();
-            res.status(200).json({ message: "Post updated", post: result });
-        })
-        .catch(err => {
-            if (!err.statusCode) {
-                err.statusCode = 500;
-            }
-            // throw will not work in a promise here
-            // because it's async
-            //throw err
-            next(err);
-        })
-
-}
-
-exports.deletePost = (req, res, next) => {
-    const postId = req.params.postId;
-    Post.findById(postId)
-        .then(post => {
-            //logged user?
-            if (!post) {
-                const error = new Error("Cant find post");
-                error.statusCode = 404;
-                // if you throw err in .then
-                // it will get to the catch();
-                throw error;
-            }
-            if (post.creator.toString() !== req.userId) {
-                const error = new Error('Authorization error');
-                error.statusCode = 403;
-                throw error;
-            }
-            clearImage(post.imageUrl);
-            return Post.findByIdAndRemove(postId);
-        })
-        .then(result => {
-            console.log("Post deleted", result);
-            //clearing posts from user object in the DB
-            return User.findById(req.userId);
-        })
-        .then(user => {
-            // pull is a mongoose method in this case
-            // deleting the post from the user object
-            user.posts.pull(postId);
-            return user.save();
-        })
-        .then(result => {
-            console.log("Deleted", result);
-            res.status(200).json({ message: "Deleted Post" });
-        })
-        .catch(err => {
-            if (!err.statusCode) {
-                err.statusCode = 500;
-            }
-            // throw will not work in a promise here
-            // because it's async
-            //throw err
-            next(err);
-        })
-}
-
-exports.getUserStatus = (req, res, next) => {
-    const userId = req.userId;
-
-    User.findById(userId)
-        .then(user => {
-            console.log(user);
-            if (!user) {
-                throw new Error("Can't find user with this userId")
-            }
-
-            res.status(200).json({ message: "Found user status", status: user.status })
-        })
-        .catch(error => {
-            const err = new Error('Network error');
+        let foundPost = await Post.findById(postId);
+        if (!foundPost) {
+            const error = new Error("Cant find post");
+            error.statusCode = 404;
+            // if you throw err in .then
+            // it will get to the catch();
+            throw error;
+        }
+        if (foundPost.creator.toString() !== req.userId) {
+            const error = new Error('Authorization error');
+            throw error;
+        }
+        // meaning that the image was changed
+        // and the last image needs to be deleted
+        if (imageUrl !== foundPost.imageUrl) {
+            clearImage(foundPost.ImageUrl);
+        }
+        foundPost.title = title;
+        foundPost.imageUrl = imageUrl;
+        foundPost.content = content;
+        let savePostResult = await foundPost.save();
+        res.status(200).json({ message: "Post updated", post: savePostResult });
+    } catch (err) {
+        if (!err.statusCode) {
             err.statusCode = 500;
-            err.error = error;
-            next(err);
-        })
+        }
+        // throw will not work in a promise here
+        // because it's async
+        //throw err
+        next(err);
+    }
+
+    // Post.findById(postId)
+    //     .then(post => {
+    //         if (!post) {
+    //             const error = new Error("Cant find post");
+    //             error.statusCode = 404;
+    //             // if you throw err in .then
+    //             // it will get to the catch();
+    //             throw error;
+    //         }
+    //         if (post.creator.toString() !== req.userId) {
+    //             const error = new Error('Authorization error');
+    //             throw error;
+    //         }
+    //         // meaning that the image was changed
+    //         // and the last image needs to be deleted
+    //         if (imageUrl !== post.imageUrl) {
+    //             clearImage(post.ImageUrl);
+    //         }
+
+    //         post.title = title;
+    //         post.imageUrl = imageUrl;
+    //         post.content = content;
+    //         return post.save();
+    //     })
+    //     .then(result => {
+    //         //we get the result of the .save();
+    //         res.status(200).json({ message: "Post updated", post: result });
+    //     })
+    //     .catch(err => {
+    //         if (!err.statusCode) {
+    //             err.statusCode = 500;
+    //         }
+    //         // throw will not work in a promise here
+    //         // because it's async
+    //         //throw err
+    //         next(err);
+    //     })
+
 }
 
-exports.updateUserStatus = (req, res, next) => {
+exports.deletePost = async (req, res, next) => {
+    const postId = req.params.postId;
 
+    try {
+
+        let foundPost = await Post.findById(postId);
+        if (!foundPost) {
+            const error = new Error("Cant find post");
+            error.statusCode = 404;
+            // if you throw err in .then
+            // it will get to the catch();
+            throw error;
+        }
+        if (foundPost.creator.toString() !== req.userId) {
+            const error = new Error('Authorization error');
+            error.statusCode = 403;
+            throw error;
+        }
+        // image is safe to delete if above conditions are met
+        clearImage(foundPost.imageUrl);
+        let deletedResult = await Post.findByIdAndRemove(postId);
+        console.log("Post deleted", deletedResult);
+        //clearing posts from the user object in the db
+        let foundUser = await User.findById(req.userId);
+        // mongoose provided method
+        foundUser.posts.pull();
+        let saveUserResult = await foundUser.save();
+        console.log("Deleted", saveUserResult);
+        res.status(200).json({ message: "Deleted Post" });
+    } catch (err) {
+        if (!err.statusCode) {
+            err.statusCode = 500;
+        }
+        // throw will not work in a promise here
+        // because it's async
+        //throw err
+        next(err);
+    }
+    // Post.findById(postId)
+    //     .then(post => {
+    //         //logged user?
+    //         if (!post) {
+    //             const error = new Error("Cant find post");
+    //             error.statusCode = 404;
+    //             // if you throw err in .then
+    //             // it will get to the catch();
+    //             throw error;
+    //         }
+    //         if (post.creator.toString() !== req.userId) {
+    //             const error = new Error('Authorization error');
+    //             error.statusCode = 403;
+    //             throw error;
+    //         }
+    //         clearImage(post.imageUrl);
+    //         return Post.findByIdAndRemove(postId);
+    //     })
+    //     .then(result => {
+    //         console.log("Post deleted", result);
+    //         //clearing posts from user object in the DB
+    //         return User.findById(req.userId);
+    //     })
+    //     .then(user => {
+    //         // pull is a mongoose method in this case
+    //         // deleting the post from the user object
+    //         user.posts.pull(postId);
+    //         return user.save();
+    //     })
+    //     .then(result => {
+    //         console.log("Deleted", result);
+    //         res.status(200).json({ message: "Deleted Post" });
+    //     })
+    //     .catch(err => {
+    //         if (!err.statusCode) {
+    //             err.statusCode = 500;
+    //         }
+    //         // throw will not work in a promise here
+    //         // because it's async
+    //         //throw err
+    //         next(err);
+    //     })
+}
+
+exports.getUserStatus = async (req, res, next) => {
+    const userId = req.userId;
+    try {
+        let foundUser = await User.findById(userId);
+        if (!foundUser) {
+            throw new Error("Can't find user to get it's status")
+        }
+        res.status(200).json({ message: "Found user status", status: foundUser.status });
+    } catch (err) {
+        const error = new Error("Network Error");
+        error.statusCode = 500;
+        error.otherErrors = err;
+        next(error);
+    }
+    // User.findById(userId)
+    //     .then(user => {
+    //         console.log(user);
+    //         if (!user) {
+    //             throw new Error("Can't find user with this userId")
+    //         }
+
+    //         res.status(200).json({ message: "Found user status", status: user.status })
+    //     })
+    //     .catch(error => {
+    //         const err = new Error('Network error');
+    //         err.statusCode = 500;
+    //         err.error = error;
+    //         next(err);
+    //     })
+}
+
+exports.updateUserStatus = async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        const error = new Error("Invalid status");
+        error.statusCode = 422;
+        throw error;
+    }
     const userId = req.userId;
     const newStatus = req.body.status;
-    User.findById(userId)
-        .then(user => {
-            if (!user) {
-                throw new Error("Can't find user change status")
-            }
 
-            if (!newStatus) {
-                throw new Error("New status is empty");
-            }
-            user.status = newStatus;
-            return user.save()
-        })
-        .then(result => {
-            console.log("Status updated success");
-            res.status(201).json({ message: "User status changed success", result: result });
-        })
-        .catch(error => {
-            const err = new Error('Network error');
-            err.statusCode = 500;
-            err.error = error;
-            next(err);
-        })
+    try {
+        //if it returns a promise you can use await on that method
+        let foundUser = await User.findById(userId);
+        if (!foundUser) {
+            throw new Error("Can't find user change status")
+        }
+
+        if (!newStatus) {
+            throw new Error("New status is empty");
+        }
+        foundUser.status = newStatus;
+        let saveUserResult = await foundUser.save();
+        console.log("Status update success");
+        res.status(201).json({ message: "User status changed success", result: saveUserResult })
+    } catch (error) {
+        const err = new Error('Network error');
+        err.statusCode = 500;
+        err.otherErrors = error;
+        next(err);
+    }
+
+    // User.findById(userId)
+    //     .then(user => {
+    //         if (!user) {
+    //             throw new Error("Can't find user change status")
+    //         }
+
+    //         if (!newStatus) {
+    //             throw new Error("New status is empty");
+    //         }
+    //         user.status = newStatus;
+    //         return user.save()
+    //     })
+    //     .then(result => {
+    //         console.log("Status updated success");
+    //         res.status(201).json({ message: "User status changed success", result: result });
+    //     })
+    //     .catch(error => {
+    //         const err = new Error('Network error');
+    //         err.statusCode = 500;
+    //         err.error = error;
+    //         next(err);
+    //     })
 }
 
 // deleting the image helper function
