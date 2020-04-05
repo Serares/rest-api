@@ -2,6 +2,9 @@ const jwt = require('jsonwebtoken');
 
 
 module.exports = (req, res, next) => {
+    //those headers are comming from client
+    // first the token is stored in the localStorage when logging in
+    // then the token will be on every request
     const authHeader = req.get("Authorization");
     if(!authHeader){
         const error = new Error('Not Authenticated');

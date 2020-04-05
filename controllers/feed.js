@@ -1,6 +1,8 @@
 const { validationResult } = require('express-validator');
 const Post = require('../models/post');
-//florinSalam
+
+
+const io = require("../socket");
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/user');
@@ -15,7 +17,14 @@ exports.getPosts = async (req, res, next) => {
 
         // async
         totalItems = await Post.find().countDocuments();
-        let posts = await Post.find().skip((currentPage - 1) * perPage).limit(perPage);
+        //if you use .populate('creator') it will find the object that has that id and add it to the field
+        // it will search for the ref defined in the database
+        // if you don't use populate there will be only the ID of the creator
+        let posts = await Post.find()
+        .populate('creator')
+        .sort({createdAt: -1})
+        .skip((currentPage - 1) * perPage)
+        .limit(perPage);
 
         res.status(200).json({
             message: "Posts found successfully",
@@ -64,7 +73,6 @@ exports.createPost = async (req, res, next) => {
     //added by bodyParser
     const title = req.body.title;
     const content = req.body.content;
-    let creator;
     // no need for createdAt
     // no need for _id ; mongoose will create thoes
     const post = new Post({
@@ -80,12 +88,14 @@ exports.createPost = async (req, res, next) => {
         let foundUser = await User.findById(req.userId);
         if (!foundUser) throw new Error("Can't find user to add post");
         foundUser.posts.push(post);
-        creator = foundUser;
         let resposeUserSaved = await foundUser.save();
+        // you can use .emit or .broadcast
+        io.getIO().emit('posts', { action: 'create', post: {...post._doc,creator:{_id: req.userId, name: foundUser.name} } })
+
         res.status(201).json({
             message: "Post created success",
             post: post,
-            creator: { _id: creator._id, name: creator.name },
+            creator: { _id: foundUser._id, name: foundUser.name },
             response: resposeUserSaved
         });
     } catch (err) {
@@ -180,7 +190,7 @@ exports.changePost = async (req, res, next) => {
             throw error;
         }
 
-        let foundPost = await Post.findById(postId);
+        let foundPost = await Post.findById(postId).populate('creator');
         if (!foundPost) {
             const error = new Error("Cant find post");
             error.statusCode = 404;
@@ -188,7 +198,7 @@ exports.changePost = async (req, res, next) => {
             // it will get to the catch();
             throw error;
         }
-        if (foundPost.creator.toString() !== req.userId) {
+        if (foundPost.creator._id.toString() !== req.userId) {
             const error = new Error('Authorization error');
             throw error;
         }
@@ -201,6 +211,7 @@ exports.changePost = async (req, res, next) => {
         foundPost.imageUrl = imageUrl;
         foundPost.content = content;
         let savePostResult = await foundPost.save();
+        io.getIO().emit('posts', {action: 'update', post: savePostResult})
         res.status(200).json({ message: "Post updated", post: savePostResult });
     } catch (err) {
         if (!err.statusCode) {
@@ -272,14 +283,14 @@ exports.deletePost = async (req, res, next) => {
         }
         // image is safe to delete if above conditions are met
         clearImage(foundPost.imageUrl);
-        let deletedResult = await Post.findByIdAndRemove(postId);
-        console.log("Post deleted", deletedResult);
+        await Post.findByIdAndRemove(postId);
         //clearing posts from the user object in the db
         let foundUser = await User.findById(req.userId);
         // mongoose provided method
         foundUser.posts.pull();
         let saveUserResult = await foundUser.save();
         console.log("Deleted", saveUserResult);
+        io.getIO().emit('posts', {action: 'delete', post: postId})
         res.status(200).json({ message: "Deleted Post" });
     } catch (err) {
         if (!err.statusCode) {
