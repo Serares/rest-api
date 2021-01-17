@@ -48,7 +48,7 @@ exports.signup = (req, res, next) => {
 }
 
 exports.login = (req, res, next) => {
-
+    const errors = validationResult(req);
     const email = req.body.email;
     const password = req.body.password;
     let loadedUser;
